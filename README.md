@@ -4,6 +4,31 @@ This is a daemon for the MiSTer DE10-nano FPGA to allow ALSA supported USB MIDI 
 MidiLink 2.0 is now included in MiSTer general and incudes MUNT and
 FluidSynth support running on the HPS ARM core!
 
+## Compiling
+
+To compile, you'll want to modify the Makefile to match your version of arm-gcc.
+
+https://github.com/MiSTer-devel/Wiki_MiSTer/wiki/ARM-cross-compiling
+
+Assuming you follow the instructions in the above link today and you untar your tar.xz to /home/mister, your CC should be changed /home/mister/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/bin/arm-none-linux-gnueabihf-gcc and you can just run make.
+
+## Copying
+
+Using SCP you can copy the file over to your mister. Then from there you can copy it to /sbin/ overwriting the current midilink. Remember that this file will be replaced during updates.
+
+Example:
+
+```sh
+scp /home/mister/MidiLink_MiSTer-javantea_m/midilink root@10.0.0.61:
+ssh root@10.0.0.61
+cp -i /sbin/midilink midilink.bak
+cp -i ./midilink /sbin/midilink
+```
+
+This leaves you with a backup of midilink which you should probably keep on the SD card so that you can get it if this one doesn't work for some purpose.
+
+## Instructions
+
 Uartmode : MIDI : Local / MUNT   
 
 Use MUNT softSynth.

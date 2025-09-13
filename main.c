@@ -72,6 +72,8 @@ char                    UDPServer [100]        = "";
 char                    mixerControl[20]       = "Master";
 char                    MUNTOptions[30]        = "";
 char                    USBSerModule[100]      = "";
+int                     no_input               = 0; // Switch for how to deal with /dev/midi2 being missing.
+int                     output_midi            = 0;
 
 static pthread_t        midiInThread;
 static pthread_t        midiINInThread;
@@ -313,6 +315,11 @@ void * midi_thread_function (void * x)
 {
     unsigned char buf [100];
     int rdLen;
+    if(fdMidi == -1)
+    {
+        // No sense in staying in this loop spitting out errors.
+        return 0;
+    }
     do
     {
         rdLen = read(fdMidi, &buf, sizeof(buf));
@@ -522,6 +529,8 @@ int main(int argc, char *argv[])
         if(misc_check_args_option(argc, argv, "UDPMUNT"))   mode = ModeUDPMUNT;
         if(misc_check_args_option(argc, argv, "UDPMUNTGM")) mode = ModeUDPMUNTGM;
         if(misc_check_args_option(argc, argv, "UDPFSYNTH")) mode = ModeUDPFSYNTH;
+        if(misc_check_args_option(argc, argv, "NOINPUT")) no_input = 1;
+        if(misc_check_args_option(argc, argv, "OUTPUT")) output_midi = 1;
     }
 
     if (mode == ModeUSBMIDI && !misc_check_device(midiDevice)) // no USB MIDI 
@@ -708,6 +717,7 @@ int main(int argc, char *argv[])
         close_fd();
         return 0;
     }
+    misc_print(0, "Debug 1 %i\n", mode);
 
     switch(mode)
     {
@@ -820,14 +830,19 @@ int main(int argc, char *argv[])
     break;
     case ModeUSBMIDI:
     {
-        fdMidi = open(midiDevice, O_RDWR);
-        if (fdMidi < 0)
+        misc_print(0, "USB MIDI =_=\n");
+        if(output_midi)
         {
-            misc_print(0, "ERROR: cannot open %s: %s\n", midiDevice, strerror(errno));
-            close_fd();
-            return -17;
+            fdMidi = open(midiDevice, O_RDWR);
+            if (fdMidi < 0)
+            {
+                misc_print(0, "ERROR: cannot open %s: %s\n", midiDevice, strerror(errno));
+                close_fd();
+                return -17;
+            }
         }
 
+        misc_print(0, "USB MIDI %s\n", midiDevice);
         if (misc_check_device(midiINDevice))
         {
             fdMidiIN = open(midiINDevice, O_RDONLY);
@@ -838,6 +853,20 @@ int main(int argc, char *argv[])
                 return -18;
             }
         }
+        else if(!no_input)
+        {
+            // TODO: Obviously configuration right?
+            fdMidiIN = open(midiDevice, O_RDONLY);
+            if (fdMidiIN < 0)
+            {
+                misc_print(0, "ERROR: cannot open %s: %s\n", midiINDevice, strerror(errno));
+                close_fd();
+                return -24;
+            }
+            // In the case that they have not specifically said so, we assume they want the input loop.
+            misc_print(0, "MIDI in --> %s\n", midiDevice);
+        }
+        misc_print(0, "MIDI in %i\n", fdMidiIN);
 
         if (misc_check_args_option(argc, argv, "TESTMIDI")) //Play midi test note
         {
@@ -928,6 +957,13 @@ int main(int argc, char *argv[])
     switch(mode)
     {
     case ModeUSBMIDI:
+        if(!output_midi)
+        {
+            // We're done in this thread. the other thread will do its job.
+            while(1) {
+                sleep(1);
+            }
+        }
         misc_print(1, "Sending MIDI --> all-notes-off\n");
         write_midi_packet(all_notes_off, sizeof_all_notes_off);
         if(strlen(MT32LCDMsg) > 0)

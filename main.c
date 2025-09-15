@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "ini.h"
 #include "modem.h"
 #include "config.h"
+#include <poll.h>
 
 enum MODE {ModeUSBMIDI, ModeSERMIDI, ModeTCP, ModeUDP, ModeUSBSER, ModeMUNT, ModeMUNTGM, ModeFSYNTH, ModeUDPMUNT, ModeUDPMUNTGM, ModeUDPFSYNTH};
 
@@ -315,13 +316,31 @@ void * midi_thread_function (void * x)
 {
     unsigned char buf [100];
     int rdLen;
+    int retval;
+    struct pollfd pfd = { .fd = fdMidi, .events = POLLIN };
+    struct timeval tv;
+
     if(fdMidi == -1)
     {
         // No sense in staying in this loop spitting out errors.
+        // It might make sense if we continually check and try opening it again.
         return 0;
     }
     do
     {
+        // Since it's non-blocking this will use a ton of cpu if we don't use a poll.
+        // It will work and has been tested without poll.
+        retval = poll(&pfd, 1, 1000);
+        if (retval == -1)
+        {
+            misc_print(1, "ERROR: midi_thread_function() polling %s %s \n", midiDevice, strerror(errno));
+        }
+        else if (!retval)
+        {
+            // No data.
+            continue;
+        }
+
         rdLen = read(fdMidi, &buf, sizeof(buf));
         if (rdLen > 0)
         {
